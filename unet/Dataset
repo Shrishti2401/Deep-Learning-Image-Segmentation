@@ -1,0 +1,84 @@
+import os
+
+import matplotlib.pyplot as plt
+from PIL import Image
+from torch.utils.data import Dataset
+import numpy as np
+
+class Phantomdataset(Dataset):
+    def __init__(self, fbpbatch1_dir, fbpbatch2_dir,fbpbatch3_dir,fbpbatch4_dir,
+                 phantombatch1_dir, phantombatch2_dir,phantombatch3_dir,phantombatch4_dir):
+        self.fbpbatch1_dir = fbpbatch1_dir
+        self.fbpbatch2_dir = fbpbatch2_dir
+        self.fbpbatch4_dir = fbpbatch4_dir
+        self.fbpbatch3_dir = fbpbatch3_dir
+        self.phantombatch1_dir = phantombatch1_dir
+        self.phantombatch2_dir = phantombatch2_dir
+        self.phantombatch3_dir = phantombatch3_dir
+        self.phantombatch4_dir = phantombatch4_dir
+        self.fbp1_ = np.load(self.fbpbatch1_dir)
+        self.fbp2_ = np.load(self.fbpbatch2_dir)
+        self.fbp3_ = np.load(self.fbpbatch3_dir)
+        self.fbp4_ = np.load(self.fbpbatch4_dir)
+
+        self.phantom1_ = np.load(self.phantombatch1_dir)
+        self.phantom2_ = np.load(self.phantombatch2_dir)
+        self.phantom3_ = np.load(self.phantombatch3_dir)
+        self.phantom4_ = np.load(self.phantombatch4_dir)
+        self.fbp_ = np.vstack((self.fbp1_,self.fbp2_,self.fbp3_,self.fbp4_))
+        self.phantom_ = np.vstack((self.phantom1_,self.phantom2_,self.phantom3_,self.phantom4_))
+        # self.fbps = os.listdir(fbp_dir)
+        # self.phantoms = os.listdir(phantom_dir
+    # def __init__(self, fbpbatch1_dir,phantombatch1_dir):
+    #     self.fbpbatch1_dir = fbpbatch1_dir
+    #
+    #     self.phantombatch1_dir = phantombatch1_dir
+    #
+    #     self.fbp_ = np.load(self.fbpbatch1_dir)
+    #
+    #     self.phantom_ = np.load(self.phantombatch1_dir)
+
+
+
+
+    def __len__(self):
+        return len(self.fbp_.shape[0])
+
+    def __getitem__(self, index):
+        # fbp_path = os.path.join(self.fbp_dir, self.fbps[index])
+        # phantom_path = os.path.join(self.phantom_dir, self.phantoms[index])
+        fbp_img = self.fbp_[index, :, :]
+        phantom_img = self.phantom_[index, :, :]
+        fbp_img = fbp_img[6:506, 6:506]
+        phantom_img = phantom_img[6:506, 6:506]
+        # fbp_img = np.array(Image.open(fbp_path).convert("L"), dtype=np.float32)
+        # phantom_img = np.array(Image.open(phantom_path).convert("L"), dtype=np.float32)
+
+        return fbp_img, phantom_img
+
+if __name__ == '__main__':
+    FBP_BATCH1_DIR = "CT_dataset/FFBP128_batch1.npy"
+    PHANTOM_BATCH1_DIR = "CT_dataset/Phantom_batch1.npy"
+    FBP_BATCH2_DIR = "CT_dataset/FFBP128_batch2.npy"
+    PHANTOM_BATCH2_DIR = "CT_dataset/Phantom_batch2.npy"
+    FBP_BATCH3_DIR = "CT_dataset/FFBP128_batch3.npy"
+    PHANTOM_BATCH3_DIR = "CT_dataset/Phantom_batch3.npy"
+    FBP_BATCH4_DIR = "CT_dataset/FFBP128_batch4.npy"
+    PHANTOM_BATCH4_DIR = "CT_dataset/Phantom_batch4.npy"
+
+
+
+    dataset = Phantomdataset(FBP_BATCH1_DIR, FBP_BATCH2_DIR,FBP_BATCH3_DIR, FBP_BATCH4_DIR,
+                             PHANTOM_BATCH1_DIR, PHANTOM_BATCH2_DIR,PHANTOM_BATCH3_DIR, PHANTOM_BATCH4_DIR)
+    # dataset = Phantomdataset(FBP_BATCH1_DIR,PHANTOM_BATCH1_DIR)
+    # i, j = dataset[3000]
+    # print(i.shape, j.shape)
+    print(dataset[0])
+    # print(type(i))
+    # plt.imshow(j).set_cmap("gray")
+    # plt.show()
+    # plt.savefig("test_graph.png")
+
+
+
+

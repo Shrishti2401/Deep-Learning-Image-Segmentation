@@ -1,0 +1,173 @@
+from tqdm import tqdm
+import torch
+import torch.nn as nn
+import numpy as np
+import matplotlib.pyplot as plt
+import torch.nn.functional as F
+import torch.optim as optim
+# import albumentations as A
+# from albumentations.pytorch import ToTensorV2
+from resnet import ResUnet
+import time
+
+from torch.autograd import Variable
+from tqdm import trange
+from time import sleep
+use_gpu = torch.cuda.is_available()
+
+from sklearn.model_selection import train_test_split
+from dataset2 import Phantomdataset
+N=4000
+batch_size = 2
+epochs = 20
+epoch_lapse = 5
+threshold = 0.33
+sample_size = None
+width_out = 512
+height_out = 512
+FBP_BATCH1_DIR = "CT_dataset/FFBP128_batch1.npy"
+PHANTOM_BATCH1_DIR = "CT_dataset/Phantom_batch1.npy"
+FBP_BATCH2_DIR = "CT_dataset/FFBP128_batch2.npy"
+PHANTOM_BATCH2_DIR = "CT_dataset/Phantom_batch2.npy"
+FBP_BATCH3_DIR = "CT_dataset/FFBP128_batch3.npy"
+PHANTOM_BATCH3_DIR = "CT_dataset/Phantom_batch3.npy"
+FBP_BATCH4_DIR = "CT_dataset/FFBP128_batch4.npy"
+PHANTOM_BATCH4_DIR = "CT_dataset/Phantom_batch4.npy"
+dataset = Phantomdataset(FBP_BATCH1_DIR, FBP_BATCH2_DIR,FBP_BATCH3_DIR, FBP_BATCH4_DIR,
+                             PHANTOM_BATCH1_DIR, PHANTOM_BATCH2_DIR,PHANTOM_BATCH3_DIR, PHANTOM_BATCH4_DIR)
+x_train = np.zeros((392, 1,512,512),dtype=np.float32)
+y_train = np.zeros((392, 1,512,512),dtype=np.float32)
+x_test = np.zeros((8, 1,512,512),dtype=np.float32)
+
+def count_parameters(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+def time_taken(start_time, end_time):
+    elapsed_time = end_time - start_time
+    elapsed_mins = int(elapsed_time / 60)
+    elapsed_secs = int(elapsed_time - (elapsed_mins * 60))
+    return elapsed_mins, elapsed_secs
+
+
+
+
+def train_step(inputs, labels, optimizer, criterion, batch_size):
+    # print("**Inside traing step****")
+    optimizer.zero_grad()
+    # forward + backward + optimize
+
+    outputs = res_net(inputs)
+    # outputs.shape =(batch_size, n_classes, img_cols, img_rows)
+    outputs = outputs.permute(0, 2, 3, 1)
+    # outputs.shape =(batch_size, img_cols, img_rows, n_classes)
+    # print(outputs.shape)
+    outputs = outputs.reshape(batch_size*width_out*height_out)
+    labels = labels.reshape(batch_size*width_out*height_out)
+    loss = torch.sqrt(criterion(outputs, labels))
+    loss = torch.sum(loss) / batch_size
+    # loss=loss.to(torch.float32)
+    # print("Losstype",loss.type)
+    loss.backward()
+    optimizer.step()
+    return loss
+
+def get_val_loss(x_val, y_val, batch_size=batch_size):
+    print("***Inside validation step*****")
+    epoch_iter = np.ceil(x_val.shape[0] / batch_size).astype(int)
+    for _ in range(epoch_iter):
+        total_loss = 0
+
+        for i in range(epoch_iter):
+            batch_val_x = torch.from_numpy(x_val[i * batch_size : (i + 1) * batch_size]).float()
+            batch_val_y = torch.from_numpy(y_val[i * batch_size : (i + 1) * batch_size]).float()
+            if use_gpu:
+                batch_val_x = batch_val_x.cuda()
+                batch_val_y = batch_val_y.cuda()
+            m = batch_val_x.shape[0]
+            # start_time = time.time()
+            outputs = res_net(batch_val_x)
+            outputs = outputs.permute(0, 2, 3, 1)
+            # outputs.shape =(batch_size, img_cols, img_rows, n_classes)
+            # print(outputs.shape)
+            outputs = outputs.reshape(m*width_out*height_out)
+            labels = batch_val_y.reshape(m*width_out*height_out)
+            loss = torch.sqrt(F.mse_loss(outputs, labels))
+            loss = torch.sum(loss)/batch_size
+            # print("Computed loss", loss)
+            total_loss += loss.data
+            # end_time = time.time()
+            # epoch_mins, epoch_secs = time_taken(start_time, end_time)
+            # print(f'Training: {i} iteration | Time: {epoch_mins}m {epoch_secs}s')
+
+            # GC.collect()
+    return total_loss / epoch_iter
+
+start_time = time.time()
+for k in range(21,22):
+
+    l=[]
+    #shuffle the training data
+    l = np.random.permutation(N)
+
+    x_train = np.zeros((392, 1, 512, 512), dtype=np.float32)
+    y_train = np.zeros((392, 1, 512, 512), dtype=np.float32)
+    x_test = np.zeros((8, 1, 512, 512), dtype=np.float32)
+
+    print('Getting train and test images ... ')
+    for n in range(392):
+        x_train[n], y_train[n] = dataset[l[n]]
+    for n in range(8):
+        x_test[n], _ = dataset[l[n]]
+
+    print("x_train.shape, y_train.shape, x_test.shape", x_train.shape, y_train.shape, x_test.shape)
+    print("Splitting training data into train and validation image")
+    x_train, x_val, y_train, y_val =  train_test_split(x_train, y_train, test_size=0.10)
+    print("x_train.shape, y_train.shape, x_val.shape,y_val.shape", x_train.shape, y_train.shape, x_val.shape,y_val.shape)
+
+
+
+    res_net = ResUnet(1)
+    print(f'The model has {count_parameters(res_net):,} trainable parameters')
+    if use_gpu:
+        res_net=res_net.cuda()
+    learning_rate = 0.01
+    criterion = nn.MSELoss(reduction='mean')
+    optimizer = optim.SGD(res_net.parameters(), lr = 0.01, momentum=0.99)
+
+    print("*****Start Training******")
+    epoch_iter = np.ceil(x_train.shape[0] / batch_size).astype(int)
+    t = trange(epochs, leave=True)
+    for j in t:
+         total_loss = 0
+         for i in range(epoch_iter):
+            batch_train_x = torch.from_numpy(x_train[i * batch_size: (i + 1) * batch_size]).float()
+            batch_train_y = torch.from_numpy(y_train[i * batch_size: (i + 1) * batch_size]).float()
+            if use_gpu:
+                batch_train_x = batch_train_x.cuda()
+                batch_train_y = batch_train_y.cuda()
+
+            batch_loss = train_step(batch_train_x, batch_train_y, optimizer, criterion, batch_train_x.shape[0])
+
+            total_loss += batch_loss
+         if (j + 1) % epoch_lapse == 0:
+            val_loss = get_val_loss(x_val, y_val)
+            print(f"Total loss in epoch {j + 1} : {total_loss / epoch_iter} and validation loss : {val_loss}")
+            torch.save(
+                {'training instance': k, 'epoch': j, 'total_loss': total_loss, 'valid_loss': val_loss}, f'resnet{k}_{j}.pt')
+end_time = time.time()
+tot_min,tot_sec  = time_taken(start_time, end_time)
+print(f'Time: {tot_min}m {tot_sec}s')
+    #    epoch_mins, epoch_secs = time_taken(start_time, end_time)
+    #     print("Batch_loss",batch_loss)
+    #     print(f'Training: {j} epoch | Time: {epoch_mins}m {epoch_secs}s')
+    #     # print(' Average Loss %.3f | Accuracy: %d%%' % (total_loss / 100, num_correct))
+    #
+    #
+    #
+    # start_time1 = time.time()
+    # val_loss = get_val_loss(x_val, y_val)
+    # print(f"Total loss in epoch {_ + 1} : {total_loss / epoch_iter} and validation loss : {val_loss}")
+    # end_time1 = time.time()
+    # print(f'Validation: {j} epoch | Time: {epoch_mins}m {epoch_secs}s')
+# print(train_step(torch.from_numpy(x_train[0]).view(1,1,500,500),torch.from_numpy(y_train[0]).view(1,1,500,500),optimizer,criterion,1))
+# torch.save({'epoch':_,'model_state_dict':unet.state_dict(),'optimizer_state_dict':optimizer.state_dict(),'total_loss':total_loss,'valid_loss':val_loss} 'unet.pt')

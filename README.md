@@ -21,7 +21,18 @@ Our work investigates these claims by experimenting with **modified CNN architec
 ## Results
 - Demonstrated that CNN variants can achieve **improved accuracy** in medical image reconstruction.  
 - Achieved performance gains compared to traditional sparsity-based methods.  
-- Provided evidence supporting the potential of **deep learning architectures** in solving inverse imaging problems.  
+- Provided evidence supporting the potential of **deep learning architectures** in solving inverse imaging problems.
+
+## 📑 Reports & Presentation
+- [Final Presentation Slides](Thesis_Presentation.pdf)  
+  *(Covers methodology, model architecture, performance evaluation, and key insights)*
+
+---
+
+## 📬 Contact
+👤 **Shrishti Agarwal**  
+- [LinkedIn](https://www.linkedin.com/) | [GitHub](https://github.com/) | [Email](mailto:your.email@example.com)
+
 
 ## Tools & Technologies
 - **Python, TensorFlow/PyTorch**  
